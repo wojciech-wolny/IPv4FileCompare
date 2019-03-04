@@ -1,4 +1,4 @@
-# Copyright [2019] [Wojciech Wolny]
+# Copyright 2019 Wojciech Wolny
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,16 @@
 # limitations under the License.
 
 import sys
-from ipaddress import IPv4Address, IPv4Network, ip_interface
-from typing import List, Union
+from ipaddress import IPv4Network, ip_interface
+from json import dumps
+from typing import List, Dict, Generator
 
 
 class Config:
-    pass
+    json = '--json' in sys.argv
+    match = '--match' in sys.argv
+    not_match = '--not-match' in sys.argv
+    not_empty = '--not-empty' in sys.argv
 
 
 def show_help_msg():
@@ -67,7 +71,7 @@ def read_file_to_list(file_name: str) -> list:
     return output_list
 
 
-def create_list_of_subnets(list_of_ips: List[str]) -> List[Union[IPv4Address, IPv4Network]]:
+def create_list_of_subnets(list_of_ips: List[str]) -> List[IPv4Network]:
     return [ip_interface(ip).network for ip in list_of_ips]
 
 
@@ -76,44 +80,51 @@ def create_list_of_networks(list_of_networks: List[str]) -> List[IPv4Network]:
 
 
 def compare_lists_of_addresses(subnet_list, network_list):
-    result = {'Not matched': []}
+    results = {'Not matched': []}
 
     for subnet in subnet_list:
         match = False
 
         for network in network_list:
-            if not str(network) in result:
-                result[str(network)] = []
+            if not str(network) in results:
+                results[str(network)] = []
 
             if subnet.subnet_of(network):
-                result[str(network)].append(str(subnet))
+                results[str(network)].append(str(subnet))
                 match = True
 
         if not match:
-            result['Not matched'].append(str(subnet))
+            results['Not matched'].append(str(subnet))
 
-    return result
+    return results
 
 
-def default_print(result):
-    if '--not-match' in sys.argv:
-        print(f'*-*-*-* Not matched *-*-*-*')
+def prepare_default_print(result: Dict) -> Generator:
+    if Config.not_match:
+        yield f'*-*-*-* Not matched *-*-*-*'
         i = 0
         for address in result['Not matched']:
             i += 1
-            print(f'{i} : {address}')
+            yield f'{i} : {address}'
     else:
         for key, values in result.items():
-            if ('--match' in sys.argv and key == 'Not matched') or ('--not-empty' in sys.argv and values == []):
+            if (Config.match and key == 'Not matched') or (Config.not_empty and values == []):
                 continue
-            print(f'*-*-*-* {key} *-*-*-*')
+            yield f'*-*-*-* {key} *-*-*-*'
             i = 0
             for address in values:
                 i += 1
-                print(f'{i} : {address}')
+                yield f'{i} : {address}'
 
 
-def run():
+def print_results(results: str) -> None:
+    if '--file' in sys.argv:
+        print(f'to file -> {results}')
+    else:
+        print(results)
+
+
+def run() -> None:
     network_file = sys.argv[1]
     network_list = read_file_to_list(network_file)
     network_list = create_list_of_networks(network_list)
@@ -122,9 +133,13 @@ def run():
     subnet_list = read_file_to_list(subnet_file)
     subnet_list = create_list_of_subnets(subnet_list)
 
-    result = compare_lists_of_addresses(subnet_list, network_list)
+    results = compare_lists_of_addresses(subnet_list, network_list)
 
-    default_print(result)
+    if Config.json:
+        print_results(dumps(results, ensure_ascii=False))
+    else:
+        for line in prepare_default_print(results):
+            print_results(line)
 
 
 if __name__ == '__main__':
