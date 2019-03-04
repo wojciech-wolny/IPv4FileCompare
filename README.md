@@ -3,6 +3,8 @@ Simple script which compare two files one with networks, second with ip addresse
 Return grouped subnets based on ip addresses. 
 <br/>
 # FLAGS:
+    -h --help: print help
+    
 	--not-match: return list of not matched ip addresses 
 	OUTPUT
 		*-*-*-* Not matched *-*-*-*
