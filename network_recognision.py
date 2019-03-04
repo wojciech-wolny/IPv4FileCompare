@@ -13,13 +13,14 @@
 # limitations under the License.
 
 import sys
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Address, IPv4Network, ip_interface
 from re import fullmatch
 from typing import List, Union
 
 
 def help():
-    print('Script required two files with ips or networks. Support only IPv4 \n'
+    print('Script required two files with ips. Support only IPv4.\n'
+          'Then will return groupd ip netwroks as subnets from first file \n'
           '\nFLAGS:\n'
           '\t--not-match: return list of not matched ip addresses \n'
           '\tOUTPUT: \n'
@@ -52,10 +53,6 @@ def help():
           '\t*-*-*-* 192.168.2.0/24 *-*-*-*')
 
 
-def is_ip_address(ip: str) -> bool:
-    return bool(fullmatch('(\d+\.){3}\d+', ip))
-
-
 def read_file_to_list(file_name: str) -> list:
     with open(file_name) as source_file:
         output_list = [line.strip() for line in source_file.readlines()]
@@ -63,8 +60,7 @@ def read_file_to_list(file_name: str) -> list:
 
 
 def create_list_of_subnets(list_of_ips: List[str]) -> List[Union[IPv4Address, IPv4Network]]:
-    get_ip_object = lambda ip: IPv4Address(ip) if is_ip_address(ip) else IPv4Network(ip)
-    return [get_ip_object(ip) for ip in list_of_ips]
+    return [ip_interface(ip).network for ip in list_of_ips]
 
 
 def create_list_of_networks(list_of_networks: List[str]) -> List[IPv4Network]:
@@ -77,31 +73,37 @@ def compare_lists_of_addresses(subnet_list, network_list):
     for subnet in subnet_list:
         match = False
 
-        if isinstance(subnet, IPv4Address):
-            type = 'host address'
-        elif isinstance(subnet, IPv4Network):
-            type = 'subnet'
-        else:
-            raise TypeError(f'{str(subnet)} is not IPv4 Address or Netowrk')
 
         for network in network_list:
             if not str(network) in result:
                 result[str(network)] = []
-            hosts = network.hosts()
 
-            if type == 'host address':
-                if subnet in hosts:
-                    result[str(network)].append((str(subnet), type))
-                    match = True
-            elif type == 'subnet':
-                if subnet.subnet_of(network):
-                    result[str(network)].append((str(subnet), type))
-                    match = True
+            if subnet.subnet_of(network):
+                result[str(network)].append(str(subnet))
+                match = True
 
         if not match:
-            result['Not matched'].append((str(subnet), type))
+            result['Not matched'].append(str(subnet))
 
     return result
+
+
+def default_print(result):
+    if '--not-match' in sys.argv:
+        print(f'*-*-*-* Not matched *-*-*-*')
+        i = 0
+        for address, type in result['Not matched']:
+            i += 1
+            print(f'{i} : {address} is {type}')
+    else:
+        for key, values in result.items():
+            if ('--match' in sys.argv and key == 'Not matched') or ('--not-empty' in sys.argv and values == []):
+                continue
+            print(f'*-*-*-* {key} *-*-*-*')
+            i = 0
+            for address in values:
+                i += 1
+                print(f'{i} : {address}')
 
 
 if __name__ == '__main__':
@@ -120,18 +122,4 @@ if __name__ == '__main__':
 
         result = compare_lists_of_addresses(subnet_list, network_list)
 
-        if '--not-match' in sys.argv:
-            print(f'*-*-*-* Not matched *-*-*-*')
-            i = 0
-            for address, type in result['Not matched']:
-                i += 1
-                print(f'{i} : {address} is {type}')
-        else:
-            for key, values in result.items():
-                if ('--match' in sys.argv and key == 'Not matched') or ('--not-empty' in sys.argv and values== []):
-                    continue
-                print(f'*-*-*-* {key} *-*-*-*')
-                i = 0
-                for address, type in values:
-                    i += 1
-                    print(f'{i} : {address} is {type}')
+        default_print(result)
