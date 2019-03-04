@@ -25,7 +25,7 @@ Return grouped subnets based on ip addresses.
 	
 	--json: return json representation of results
 	
-	--file={file_name}: print results to file with given name, overwrites file if exists
+	--file={file_name}: print results to file with given name, don't overwrite file if exists
   
 # EXAMPLE OF USE: 
 Networsk file contain only list of networks and masks, separated by new line. 

@@ -15,7 +15,7 @@
 import sys
 from ipaddress import IPv4Network, ip_interface
 from json import dumps
-from typing import List, Dict, Generator
+from typing import List, Dict, Generator, Union
 
 
 class Config:
@@ -24,8 +24,11 @@ class Config:
     not_match = '--not-match' in sys.argv
     not_empty = '--not-empty' in sys.argv
 
+    file = any(['--file' in flag for flag in sys.argv])
+    file_name = [flag.split('=')[1] for flag in sys.argv if '--file' in flag][0] if file else ''
 
-def show_help_msg():
+
+def show_help_msg() -> None:
     print(
         'Script required two files with ips. Support only IPv4.\n'
         'Then will return groupd ip netwroks as subnets from first file \n'
@@ -47,7 +50,7 @@ def show_help_msg():
         '\t\t*-*-*-* 192.168.2.0/24 *-*-*-*\n'
         '\n\t--not-empty: skip empty group networks\n'
         '\n\t--json: return json representation of results\n'
-        '\n\t--file={file_name}: print results to file with given name, overwrites file if exists\n'
+        '\n\t--file={file_name}: print results to file with given name, don\'t overwrite file if exists\n'
         '\nEXAMPLE OF USE: \n'
         'Networsk file contain only list of networks and masks, separated by new line. \n'
         'Ipaddresses file contain only list of networks and masks or ip addresses, separated by new line.\n'
@@ -79,8 +82,8 @@ def create_list_of_networks(list_of_networks: List[str]) -> List[IPv4Network]:
     return [IPv4Network(network) for network in list_of_networks]
 
 
-def compare_lists_of_addresses(subnet_list, network_list):
-    results = {'Not matched': []}
+def compare_lists_of_addresses(subnet_list: List[IPv4Network], network_list: List[IPv4Network]) -> Dict:
+    results = {'NotMatched': []}
 
     for subnet in subnet_list:
         match = False
@@ -94,7 +97,7 @@ def compare_lists_of_addresses(subnet_list, network_list):
                 match = True
 
         if not match:
-            results['Not matched'].append(str(subnet))
+            results['NotMatched'].append(str(subnet))
 
     return results
 
@@ -103,13 +106,15 @@ def prepare_default_print(result: Dict) -> Generator:
     if Config.not_match:
         yield f'*-*-*-* Not matched *-*-*-*'
         i = 0
-        for address in result['Not matched']:
+        for address in result['NotMatched']:
             i += 1
             yield f'{i} : {address}'
     else:
         for key, values in result.items():
-            if (Config.match and key == 'Not matched') or (Config.not_empty and values == []):
+            if (Config.match and key == 'NotMatched') or (Config.not_empty and values == []):
                 continue
+            elif key == 'NotMatched':
+                key = 'Not matched'
             yield f'*-*-*-* {key} *-*-*-*'
             i = 0
             for address in values:
@@ -117,11 +122,20 @@ def prepare_default_print(result: Dict) -> Generator:
                 yield f'{i} : {address}'
 
 
-def print_results(results: str) -> None:
-    if '--file' in sys.argv:
-        print(f'to file -> {results}')
+def print_results(results: Union[Dict, str]) -> None:
+    if Config.file:
+        with open(Config.file_name, 'a') as output_file:
+            if Config.json:
+                output_file.write(f'{dumps(results)}\n')
+            else:
+                for line in prepare_default_print(results):
+                    output_file.write(f'{line}\n')
     else:
-        print(results)
+        if Config.json:
+            print(dumps(results))
+        else:
+            for line in prepare_default_print(results):
+                print(line)
 
 
 def run() -> None:
@@ -135,11 +149,7 @@ def run() -> None:
 
     results = compare_lists_of_addresses(subnet_list, network_list)
 
-    if Config.json:
-        print_results(dumps(results, ensure_ascii=False))
-    else:
-        for line in prepare_default_print(results):
-            print_results(line)
+    print_results(results)
 
 
 if __name__ == '__main__':
