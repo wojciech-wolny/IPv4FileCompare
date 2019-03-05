@@ -1,7 +1,13 @@
 # IPv4FileCompare
 Simple script which compare two files one with networks, second with ip addresses. 
 Return grouped subnets based on ip addresses. 
-<br/>
+
+## Authors
+	Ireneusz Wolny
+	Wojciech Wolny
+		
+
+
 # FLAGS:
     -h --help: print help
     
